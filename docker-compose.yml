@@ -1,0 +1,102 @@
+services:
+  # --- BANCO DE DADOS ---
+  db:
+    image: mysql:8.0
+    container_name: mysql_db
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - MYSQL_DATABASE=main_db
+      - MYSQL_ROOT_PASSWORD=${DB_ROOT_PASSWORD}
+      - MYSQL_USER=${DB_USER}
+      - MYSQL_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - mysql-data:/var/lib/mysql
+      # Busca o init.sql na pasta do backend
+      - ../ceramic-resources-management-backend/mysql-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ceramic-net
+
+  # --- BACKEND (Spring Boot) ---
+  backend:
+    build:
+      # Caminho relativo para a pasta do repositório BACKEND
+      context: ../ceramic-resources-management-backend
+    container_name: backend_api
+    restart: unless-stopped
+    expose:
+      - "8080"
+    env_file:
+      - .env
+    environment:
+      # --- Conexão com Banco (Forçando Docker DNS) ---
+      - MAIN_DB_URL=jdbc:mysql://db:3306/main_db?useSSL=false&allowPublicKeyRetrieval=true
+      - TENANT_DB_BASE_URL=jdbc:mysql://db:3306?useSSL=false&allowPublicKeyRetrieval=true
+      - TENANT_DB_PORT=3306
+      
+      # --- Credenciais do Banco ---
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      
+      # --- Integração e CORS ---
+      # O SITE_ADDRESS define a origem confiável
+      - FRONTEND_BASE_URL=https://${SITE_ADDRESS}
+      # Permite o domínio de prod e o localhost para testes
+      - CORS_ALLOWED_ORIGINS=https://${SITE_ADDRESS},http://localhost:8081
+      
+      # As demais variáveis (SendGrid, Auth Secrets) são injetadas automaticamente pelo env_file
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - ceramic-net
+
+  # --- FRONTEND (Angular) ---
+  frontend:
+    build:
+      # Caminho relativo para a pasta do repositório FRONTEND
+      context: ../ceramic-resources-management-frontend
+    container_name: frontend_app
+    restart: unless-stopped
+    expose:
+      - "80"
+    depends_on:
+      - backend
+    networks:
+      - ceramic-net
+
+  # --- GATEWAY (Caddy) ---
+  gateway:
+    image: caddy:alpine
+    container_name: caddy_gateway
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      - SITE_ADDRESS=${SITE_ADDRESS}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - ceramic-net
+
+volumes:
+  mysql-data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  ceramic-net:
+    driver: bridge

@@ -1,0 +1,30 @@
+{
+    email jonasdurau@gmail.com
+}
+
+{$SITE_ADDRESS} {
+    encode zstd gzip
+
+    # --- API BACKEND ---
+    # Roteia requisições que começam com /api/ para o backend.
+    # IMPORTANTE: O 'handle' PRESERVA o prefixo /api na URL enviada ao backend.
+    handle /api/* {
+        reverse_proxy backend:8080 {
+            header_up Host {host}
+            header_up X-Real-IP {remote}
+        }
+    }
+
+    # --- FRONTEND ---
+    # Qualquer outra rota cai aqui e é servida pelo Angular
+    handle {
+        reverse_proxy frontend:80
+    }
+    
+    # Headers de Segurança
+    header {
+        X-Frame-Options "SAMEORIGIN"
+        X-XSS-Protection "1; mode=block"
+        X-Content-Type-Options "nosniff"
+    }
+}

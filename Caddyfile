@@ -9,7 +9,7 @@
     # Roteia requisições que começam com /api/ para o backend.
     # IMPORTANTE: O 'handle' PRESERVA o prefixo /api na URL enviada ao backend.
     handle /api/* {
-        reverse_proxy backend:8080 {
+        reverse_proxy backend_api:8080 {
             header_up Host {host}
             header_up X-Real-IP {remote}
         }
@@ -18,7 +18,7 @@
     # --- FRONTEND ---
     # Qualquer outra rota cai aqui e é servida pelo Angular
     handle {
-        reverse_proxy frontend:80
+        reverse_proxy frontend_app:80
     }
     
     # Headers de Segurança

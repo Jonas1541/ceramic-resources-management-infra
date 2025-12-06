@@ -4,3 +4,4 @@
 .vscode/
 caddy_data/
 mysql_data/
+docker-compose.override.yml
